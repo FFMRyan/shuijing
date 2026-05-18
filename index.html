@@ -3267,9 +3267,30 @@
     box-shadow: 0 6px 14px rgba(122, 77, 208, 0.10) !important;
   }
 
-  /* —— bracelet 舞台底:几乎隐藏,去掉强紫晕 —— */
+  /* —— bracelet 舞台底:完全干净,任何涂层/光晕一律去除 —— */
   .bracelet-stage {
     background: transparent !important;
+  }
+  .bracelet-glow,
+  .bracelet-stage.complete .bracelet-glow {
+    display: none !important;
+  }
+  .bracelet-stage.complete #bracelet-svg {
+    filter: none !important;
+  }
+
+  /* —— cfg-header 居中(无返回按钮)—— */
+  .cfg-header { justify-content: center !important; }
+
+  /* —— stage-meta:从绝对覆盖手串顶部 → 改为在手串上方独立一行 —— */
+  .stage-meta {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    align-self: center !important;
+    margin: 0 auto 10px !important;
+    z-index: 4 !important;
   }
 
   /* —— Picker 底部抽屉:纯白 —— */
@@ -3388,6 +3409,188 @@
 
   /* —— 去掉浅噪点纸面纹理(也产生轻微的红紫底,影响"白净"观感) —— */
   body::after { display: none !important; }
+
+  /* ============================================================
+     第六轮:移动端阅读体验全面优化(响应式 + 触控 + 稳定视口)
+     ============================================================ */
+
+  /* —— 优先使用动态/小视口高度,避免 iOS 工具条折叠造成的"跳跃" —— */
+  html, body { height: 100%; }
+  .app, .screen {
+    height: 100svh !important;
+    height: 100dvh;
+    min-height: 100svh;
+  }
+
+  /* —— 防止溢出导致横向滚动 —— */
+  html, body { overflow-x: hidden; overscroll-behavior: contain; }
+
+  /* —— 字体使用 clamp() 流式缩放(基于 vw),小屏不爆字、大屏不臃肿 —— */
+  .hero-title { font-size: clamp(28px, 9.5vw, 42px) !important; line-height: 1.12 !important; }
+  .hero-subtitle { font-size: clamp(11px, 3.2vw, 13px) !important; letter-spacing: clamp(2px, 0.8vw, 4px) !important; }
+  .hero-tag { font-size: clamp(10px, 2.8vw, 12px) !important; letter-spacing: clamp(6px, 2vw, 9px) !important; }
+  .hook-q { font-size: clamp(13px, 3.6vw, 15px) !important; line-height: 1.7 !important; }
+  .hook-a { font-size: clamp(11px, 3.2vw, 13px) !important; }
+  .cta-btn { font-size: clamp(13px, 4vw, 16px) !important; letter-spacing: clamp(4px, 2vw, 8px) !important; padding: clamp(14px, 4vw, 18px) clamp(28px, 8vw, 48px) !important; }
+  .cta-hint { font-size: clamp(10px, 2.8vw, 12px) !important; }
+  .cfg-title { font-size: clamp(13px, 3.8vw, 16px) !important; }
+  .reading-narr { font-size: clamp(12.5px, 3.6vw, 14px) !important; }
+  .reading-tip { font-size: clamp(11px, 3.2vw, 13px) !important; }
+
+  /* —— 触控目标尺寸:确保关键按钮 ≥44×44pt(iOS 人因) —— */
+  .back-btn, .reset-btn {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  .stage-action-btn {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  .cat-tab { min-height: 44px !important; }
+  .elem-tab { min-height: 44px !important; }
+  .size-tab { min-height: 38px !important; }
+  .bead-action-chip,
+  .bead-chip-btn {
+    min-height: 36px !important;
+  }
+  /* picker 抓手扩大可点区域(视觉仍是细条) */
+  .picker-handle::before {
+    top: -18px !important;
+    bottom: -22px !important;
+    left: -64px !important;
+    right: -64px !important;
+  }
+
+  /* —— 防止 input 在 iOS 自动缩放(font-size <16px 会触发) —— */
+  input, textarea, select { font-size: 16px !important; }
+
+  /* —— 优化滚动惯性 / 滚动边界 —— */
+  .info-panel, .picker, .screen {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* —— 滚动区域加底部安全 padding —— */
+  .info-panel {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 60px) !important;
+    scroll-padding-bottom: 80px;
+  }
+
+  /* —— 大屏(≥600px):居中显示成手机外框,模拟原生 app 比例 —— */
+  @media (min-width: 600px) {
+    body {
+      background:
+        radial-gradient(60% 50% at 50% 0%, rgba(122, 77, 208, 0.04), transparent 70%),
+        #f4eef8 !important;
+      padding: 24px;
+      align-items: center;
+      justify-content: center;
+      display: flex;
+    }
+    .app {
+      width: min(440px, 100%);
+      height: min(100svh - 48px, 920px) !important;
+      max-height: 920px;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.9) inset,
+        0 30px 80px rgba(60, 30, 110, 0.18),
+        0 8px 24px rgba(60, 30, 110, 0.10);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .screen {
+      height: 100% !important;
+      min-height: 0;
+    }
+  }
+
+  /* —— 中等大屏(≥900px):再大也保持 phone 比例,留出环境留白 —— */
+  @media (min-width: 900px) {
+    .app {
+      width: min(420px, 100%);
+      max-height: 880px;
+    }
+  }
+
+  /* —— 极窄屏(≤360px,iPhone SE / mini)精简边距 —— */
+  @media (max-width: 360px) {
+    .hero-content { padding: max(64px, calc(env(safe-area-inset-top) + 48px)) 16px max(16px, env(safe-area-inset-bottom)) !important; gap: 14px !important; }
+    .hero-hook { padding: 12px 14px !important; max-width: 100% !important; }
+    .cfg-header { padding: max(14px, env(safe-area-inset-top)) 14px 8px !important; }
+    .bracelet-stage { padding: 0 8px !important; }
+    .info-panel { padding-left: 14px !important; padding-right: 14px !important; }
+    .bead-grid.cat-beads,
+    .bead-grid.cat-charms,
+    .bead-grid.cat-ropes {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 10px 8px !important;
+      padding: 8px 12px !important;
+    }
+    .bead-suitable { font-size: 9px !important; min-height: 0 !important; }
+    .stage-actions { gap: 8px !important; }
+    .stage-action-btn { width: 38px !important; height: 38px !important; min-width: 38px !important; min-height: 38px !important; }
+    .back-btn { width: 38px !important; height: 38px !important; min-width: 38px !important; min-height: 38px !important; }
+    .stage-meta { font-size: 10px !important; letter-spacing: 1px !important; padding: 5px 11px !important; }
+    .element-rail { width: 48px !important; padding: 0 4px 0 10px !important; }
+    .size-rail { width: 42px !important; padding: 0 10px 0 4px !important; }
+    .elem-tab { font-size: 13px !important; padding: 11px 0 !important; }
+    .size-tab { font-size: 12px !important; padding: 9px 0 !important; }
+    .magic-btn { font-size: 13px !important; padding: 12px 22px !important; letter-spacing: 3px !important; }
+  }
+
+  /* —— 横屏(landscape)避免 hero 内容被压扁,允许滚动 —— */
+  @media (max-height: 480px) and (orientation: landscape) {
+    .hero-content {
+      min-height: auto !important;
+      padding-top: 24px !important;
+      padding-bottom: 24px !important;
+      gap: 14px !important;
+    }
+    .hero-title { font-size: 26px !important; }
+    .crystal-stage { display: none !important; }
+    .screen { overflow-y: auto !important; }
+  }
+
+  /* —— 系统辅助:减少动画偏好 —— */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  /* —— 触控反馈:替换 hover 在触屏上的"卡住"态 —— */
+  @media (hover: none) {
+    .bead-item:hover { transform: none !important; }
+    .bead-item:hover .bead-orb { transform: none !important; }
+    .theme-chip:hover { transform: none !important; }
+    .stage-action-btn:hover { transform: none !important; }
+    .back-btn:hover, .reset-btn:hover { transform: none !important; background: inherit !important; }
+  }
+  /* 触屏专属 active 反馈 */
+  @media (hover: none) {
+    .bead-item:active .bead-orb { transform: scale(0.92) !important; }
+    .stage-action-btn:active { transform: scale(0.94) !important; }
+    .cat-tab:active { transform: scale(0.96) !important; }
+    .theme-chip:active { transform: scale(0.96) !important; }
+  }
+
+  /* —— 解读卡内文字可选高亮:防止段落断行进入字符中间 —— */
+  .reading-narr {
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto;
+  }
+
+  /* —— SVG 手串:用 SVG 内宽自适应,避免某些浏览器固定 360 渲染 —— */
+  #bracelet-svg {
+    width: 100% !important;
+    max-width: min(86vw, 360px) !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+  }
 
   /* —— 图形化五行分布条 —— */
   .elem-distbar {
@@ -3538,6 +3741,22 @@
   }
   .bead-item:hover .bead-orb { box-shadow: none !important; }
 
+  /* —— 佩戴效用列表:首项不再特殊强调,与其他项一致 —— */
+  .effects-list li:first-child {
+    background: rgba(255, 255, 255, 0.035) !important;
+    border-top-color: rgba(255, 255, 255, 0.04) !important;
+    border-right-color: rgba(255, 255, 255, 0.04) !important;
+    border-left-color: rgba(255, 255, 255, 0.04) !important;
+    border-bottom-color: var(--line-soft) !important;
+    border-width: 1px !important;
+    border-style: solid !important;
+    box-shadow: none !important;
+  }
+  .effects-list li:first-child::before { display: none !important; }
+  .effects-list li:first-child .eff-orb {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10) !important;
+  }
+
   /* —— 微纸面纹理(极淡的 SVG 噪点),增强质感而不喧宾夺主 —— */
   body::after {
     content: '';
@@ -3598,9 +3817,7 @@
     <div class="stars" style="opacity:0.4"></div>
 
     <div class="cfg-header">
-      <button class="back-btn" onclick="goTo('hero')">‹</button>
       <div class="cfg-title">编 织 手 串</div>
-      <span class="cfg-header-spacer"></span>
     </div>
 
     <div class="bracelet-stage">
@@ -3928,12 +4145,14 @@
   ];
 
   const BEAD_SIZES = [6, 8, 10, 12, 14, 16];
+  const ROPE_LENGTHS = [14, 16, 18, 20]; // cm,腕围长度
   // Cache buster — appended to image URLs so updates show without manual refresh
   const IMG_VER = Date.now();
   let activeElem = 'all';
   let activeCat = 'beads';
   let activeRope = 'auto';
   let activeSize = 10;
+  let activeRopeLength = 18; // cm,默认 18 cm 适配常规腕围
 
   function findItem(id) {
     return CRYSTALS.find(c => c.id === id) || ACCESSORIES.find(a => a.id === id);
@@ -4078,19 +4297,38 @@
   }
 
   /* ============ Size rail (right, list with horizontal dividers) ============ */
+  // 珠子/配饰:显示直径 mm;绳子:显示长度 cm
   function renderSizeRail() {
     const rail = document.getElementById('size-rail');
     if (!rail) return;
-    rail.innerHTML = BEAD_SIZES.map(s => `
-      <div class="size-tab ${activeSize === s ? 'active' : ''}" onclick="setSize(${s})">
-        ${s}<span class="mm">毫米</span>
-      </div>
-    `).join('');
-    rail.style.display = activeCat === 'beads' ? 'flex' : 'none';
+    if (activeCat === 'ropes') {
+      rail.innerHTML = ROPE_LENGTHS.map(l => `
+        <div class="size-tab ${activeRopeLength === l ? 'active' : ''}" onclick="setRopeLength(${l})">
+          ${l}<span class="mm">cm</span>
+        </div>
+      `).join('');
+      rail.style.display = 'flex';
+    } else if (activeCat === 'beads') {
+      rail.innerHTML = BEAD_SIZES.map(s => `
+        <div class="size-tab ${activeSize === s ? 'active' : ''}" onclick="setSize(${s})">
+          ${s}<span class="mm">毫米</span>
+        </div>
+      `).join('');
+      rail.style.display = 'flex';
+    } else {
+      // 配饰:暂无尺寸维度,隐藏侧栏
+      rail.innerHTML = '';
+      rail.style.display = 'none';
+    }
   }
   function setSize(size) {
     activeSize = size;
     renderSizeRail();
+  }
+  function setRopeLength(len) {
+    activeRopeLength = len;
+    renderSizeRail();
+    renderBracelet(); // 触发 stage-meta 刷新,显示当前绳长
   }
 
   /* ============ Picker ============ */
@@ -4227,12 +4465,13 @@
 
   /* ============ Thread / string style — user-selected rope or auto by 五行 ============ */
   function getThreadStyle() {
+    const lenSuffix = ` · ${activeRopeLength}cm`;
     if (activeRope && activeRope !== 'auto') {
       const r = ROPES.find(x => x.id === activeRope);
-      if (r) return { color: r.color, glow: r.glow, name: r.name + ' · 线' };
+      if (r) return { color: r.color, glow: r.glow, name: r.name + ' · 线' + lenSuffix, length: activeRopeLength };
     }
     if (bracelet.length === 0) {
-      return { color: '#8a8aa0', glow: '#c4c4d8', name: '素 · 银线' };
+      return { color: '#8a8aa0', glow: '#c4c4d8', name: '素 · 银线' + lenSuffix, length: activeRopeLength };
     }
     const counts = {};
     ELEMENTS.forEach(e => counts[e.key] = 0);
@@ -4241,10 +4480,10 @@
       if (item && item.element) counts[item.element]++;
     });
     const total = Object.values(counts).reduce((s, n) => s + n, 0);
-    if (total === 0) return { color: '#8a8aa0', glow: '#c4c4d8', name: '素 · 银线' };
+    if (total === 0) return { color: '#8a8aa0', glow: '#c4c4d8', name: '素 · 银线' + lenSuffix, length: activeRopeLength };
     const dominant = ELEMENTS.reduce((a, b) => counts[b.key] > counts[a.key] ? b : a);
     const names = { '金':'金 · 韧丝', '木':'木 · 麻绳', '水':'水 · 流光线', '火':'火 · 朱砂线', '土':'土 · 玉绒线' };
-    return { color: dominant.color, glow: dominant.glow, name: names[dominant.key] };
+    return { color: dominant.color, glow: dominant.glow, name: names[dominant.key] + lenSuffix, length: activeRopeLength };
   }
 
   /* ============ Bracelet rendering ============ */
@@ -4271,8 +4510,8 @@
     const thread = getThreadStyle();
     const threadNameEl = document.getElementById('thread-name');
     threadNameEl.textContent = thread.name;
-    threadNameEl.style.color = thread.glow;
-    threadNameEl.style.textShadow = `0 0 8px ${thread.color}`;
+    threadNameEl.style.color = '';
+    threadNameEl.style.textShadow = '';
 
     // ===== Rope · braided / twisted look =====
     // Two dashed strokes (light + dark) offset by one segment create the
@@ -4925,7 +5164,13 @@
       pick = presets[Math.floor(Math.random() * presets.length)];
       tries++;
     } while (tries < 5 && bracelet.length === pick.ids.length && pick.ids.every((id, i) => bracelet[i] && bracelet[i].id === id));
-    bracelet = pick.ids.map(id => makeBead(id, activeSize));
+    // 颗数随机 12-18(含两端);超过 preset 提供的 12 颗时,从同一 preset 循环采样以保持主题
+    const targetN = MIN_BEADS + Math.floor(Math.random() * (MAX_BEADS - MIN_BEADS + 1));
+    const ids = [];
+    for (let i = 0; i < targetN; i++) {
+      ids.push(pick.ids[i % pick.ids.length]);
+    }
+    bracelet = ids.map(id => makeBead(id, activeSize));
     renderBracelet();
     // 释放波纹动画
     const magic = document.querySelector('.magic-btn');
