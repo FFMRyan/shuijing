@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "static-server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server", "/Users/ys/Desktop/AIcoding/shuijing4", "-p", "8000", "-c-1", "--silent"],
+      "port": 8000
+    }
+  ]
+}
