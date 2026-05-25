@@ -3279,41 +3279,45 @@
   }
   .cta-row .magic-btn { margin-top: 0 !important; }
 
-  /* —— 一键配置(立即下单 左侧的副按钮) —— */
+  /* —— 一键配置(次要操作,弱化为文字链按钮)—— */
   .diy-cta {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 11px 16px;
-    background: linear-gradient(180deg, #ffffff, #f4eefb);
-    border: 1px solid rgba(122, 77, 208, 0.40);
+    gap: 4px;
+    padding: 7px 10px;
+    background: transparent;
+    border: 1px solid rgba(122, 77, 208, 0.18);
     border-radius: 999px;
-    color: #6e2cb8;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 2px;
+    color: rgba(74, 29, 140, 0.62);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.2px;
     cursor: pointer;
     white-space: nowrap;
-    box-shadow: 0 4px 12px rgba(122, 77, 208, 0.12);
-    transition: transform 0.16s var(--ease), box-shadow 0.18s var(--ease),
-                border-color 0.18s var(--ease), background 0.18s var(--ease);
+    flex: 0 0 auto;
+    transition: color 0.18s var(--ease), border-color 0.18s var(--ease),
+                background 0.18s var(--ease), transform 0.16s var(--ease);
   }
   .diy-cta svg {
-    width: 16px;
-    height: 16px;
-    animation: diyTwinkle 2.4s ease-in-out infinite;
+    width: 11px;
+    height: 11px;
+    opacity: 0.7;
   }
   .diy-cta:hover {
-    background: linear-gradient(180deg, #ffffff, #ece0f8);
-    border-color: rgba(122, 77, 208, 0.65);
-    color: #4a1d8c;
-    box-shadow: 0 6px 16px rgba(122, 77, 208, 0.22);
-    transform: translateY(-1px);
+    color: #6e2cb8;
+    border-color: rgba(122, 77, 208, 0.42);
+    background: rgba(122, 77, 208, 0.05);
   }
+  .diy-cta:hover svg { opacity: 1; }
   .diy-cta:active { transform: scale(0.96); }
-  @keyframes diyTwinkle {
-    0%, 100% { transform: scale(1);    opacity: 0.95; }
-    50%      { transform: scale(1.08); opacity: 1;    }
+
+  /* —— 立即下单为主 CTA:占满剩余空间,字号更显眼 —— */
+  .cta-row .magic-btn {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+    padding: 13px 22px !important;
+    font-size: 14px !important;
+    letter-spacing: 5px !important;
   }
 
   /* —— bracelet 舞台底:完全干净,任何涂层/光晕一律去除 —— */
