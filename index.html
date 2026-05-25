@@ -4505,18 +4505,67 @@
     return { color: dominant.color, glow: dominant.glow, name: names[dominant.key] + lenSuffix, length: activeRopeLength };
   }
 
-  /* ============ Bracelet geometry · 真实物理比例(以绳长为依据) ============ */
+  /* ============ Bracelet geometry · 切线密贴(无缝隙)+ 绳长决定上限 ============ */
   // 统一 cm/mm → SVG 单位的比例。1cm = 45,即 10×4.5,珠子与绳子同尺度。
   const CM_TO_SVG = 45;
   const MM_TO_SVG = 4.5;
-  // 给定颗数 n、单颗直径 mm、绳长 ropeCm,返回 {beadR, ringR}
-  // - 真实物理:circumference = 2πR = ropeLength ⇒ R = ropeLength / (2π)
-  // - 越长的绳,bracelet 环径越大;珠子尺寸严格按 mm 渲染
-  // - 安全约束:ringR + beadR ≤ 178(防 viewBox 裁切)
+
+  // 给定每颗珠子的半径数组 radii(SVG 单位),求圆环半径 R 使所有珠子两两相切
+  // 数学:Σᵢ 2·asin((rᵢ + rᵢ₊₁) / (2R)) = 2π
+  // 二分搜索求解,40 次迭代精度足够
+  function solveRingR(radii) {
+    const n = radii.length;
+    if (n <= 1) return radii[0] || 20;
+    // 下界:任意相邻两珠半径之和的一半(asin 输入需 ≤ 1)
+    let lo = 0;
+    for (let i = 0; i < n; i++) {
+      const s = (radii[i] + radii[(i + 1) % n]) / 2;
+      if (s > lo) lo = s;
+    }
+    // 上界:全部展开为直线时的"半周长" / π * 1.2
+    let totalChord = 0;
+    for (let i = 0; i < n; i++) totalChord += radii[i] + radii[(i + 1) % n];
+    let hi = totalChord / Math.PI;
+    for (let iter = 0; iter < 50; iter++) {
+      const mid = (lo + hi) / 2;
+      let sumA = 0;
+      for (let i = 0; i < n; i++) {
+        const c = (radii[i] + radii[(i + 1) % n]) / (2 * mid);
+        sumA += 2 * Math.asin(Math.min(1, c));
+      }
+      if (sumA > 2 * Math.PI) lo = mid; else hi = mid;
+      if (hi - lo < 0.05) break;
+    }
+    return (lo + hi) / 2;
+  }
+
+  // 给定每颗珠子的半径数组与环径,返回每颗在环上的角度(rad,起点为顶部 -π/2)
+  function computeBeadAngles(radii, R) {
+    const angles = [];
+    let a = -Math.PI / 2;
+    for (let i = 0; i < radii.length; i++) {
+      angles.push(a);
+      const rNext = radii[(i + 1) % radii.length];
+      const c = (radii[i] + rNext) / (2 * R);
+      a += 2 * Math.asin(Math.min(1, c));
+    }
+    return angles;
+  }
+
+  // 给定颗数 n、单颗直径 mm(代表值)、绳长 ropeCm,返回 {beadR, ringR}
+  // 注:实际渲染时若珠径混合,以每颗实际尺寸独立计算 r;ringR 由 solveRingR 决定
   function computeBraceletGeom(n, mm, ropeCm) {
     const beadR = (MM_TO_SVG * mm) / 2;
-    const physRing = (ropeCm * CM_TO_SVG) / (2 * Math.PI);
-    const ringR = Math.min(physRing, 178 - beadR);
+    // 缺省退化(空串/单颗):用绳长换算的物理环径
+    if (n < 2) {
+      const physRing = (ropeCm * CM_TO_SVG) / (2 * Math.PI);
+      return { beadR, ringR: Math.min(physRing, 178 - beadR) };
+    }
+    // 切线密贴环径
+    let ringR = beadR / Math.sin(Math.PI / n);
+    // 防裁切
+    const maxRing = 178 - beadR;
+    if (ringR > maxRing) ringR = maxRing;
     return { beadR, ringR };
   }
 
@@ -4549,10 +4598,20 @@
   function renderBracelet() {
     const svg = document.getElementById('bracelet-svg');
     const cx = 180, cy = 180;
-    // 用最大珠径作为 safety cap(防 viewBox 裁切);ringR 仍由绳长决定
+    // 切线密贴:用每颗实际半径求最优环径(无缝隙);空串退化用绳长换算
     const _maxMm = bracelet.length > 0 ? Math.max(...bracelet.map(b => b.size)) : activeSize;
-    const _geom = computeBraceletGeom(bracelet.length || 12, _maxMm, activeRopeLength);
-    const ringR = _geom.ringR;
+    let ringR;
+    let beadAngles = null;
+    if (bracelet.length > 1) {
+      const radii = bracelet.map(b => (MM_TO_SVG * b.size) / 2);
+      ringR = solveRingR(radii);
+      const maxRing = 178 - Math.max(...radii);
+      if (ringR > maxRing) ringR = maxRing;
+      beadAngles = computeBeadAngles(radii, ringR);
+    } else {
+      const _geom = computeBraceletGeom(bracelet.length || 12, _maxMm, activeRopeLength);
+      ringR = _geom.ringR;
+    }
 
     // 当前绳长 + 珠径下的允许区间(同步刷新 stage-meta 的 "X-Y 颗")
     const range = currentBeadRange();
@@ -4584,7 +4643,8 @@
     // ===== Rope · 3D shaded twisted cord =====
     // 上下文光照模型:光源在左上,右下偏暗 → 用 linearGradient 给环身上色;
     // 再叠加扭股(twist)亮/暗高频细节,模拟麻绳/玉线编织肌理。
-    const ropeW = Math.max(2.6, Math.min(4.4, _geom.beadR * 0.22));  // 绳径随珠径浮动
+    const _refBeadR = (MM_TO_SVG * _maxMm) / 2;
+    const ropeW = Math.max(2.6, Math.min(4.4, _refBeadR * 0.22));  // 绳径随珠径浮动
     const twistN = 56;
     const segLen = (2 * Math.PI * ringR) / (twistN * 2);
     const ropeColorDark = darken(thread.color, 0.45);
@@ -4653,7 +4713,7 @@
     bracelet.forEach((bead, i) => {
       const c = findItem(bead.id);
       if (!c) return;
-      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const angle = beadAngles ? beadAngles[i] : ((i / n) * Math.PI * 2 - Math.PI / 2);
       const slotX = cx + Math.cos(angle) * ringR;
       const slotY = cy + Math.sin(angle) * ringR;
       const r = (MM_TO_SVG * bead.size) / 2; // 真实 mm 比例
@@ -5424,9 +5484,11 @@
     const cx = 180, cy = 180;
     const n = bracelet.length;
     if (n === 0) return;
-    const _maxMm = Math.max(...bracelet.map(b => b.size));
-    const _geom = computeBraceletGeom(n, _maxMm, activeRopeLength);
-    const ringR = _geom.ringR;
+    const radii = bracelet.map(b => (MM_TO_SVG * b.size) / 2);
+    let ringR = solveRingR(radii);
+    const maxRing = 178 - Math.max(...radii);
+    if (ringR > maxRing) ringR = maxRing;
+    const beadAngles = computeBeadAngles(radii, ringR);
 
     let floatPt = null;
     if (dragState && dragState.moved) {
@@ -5436,7 +5498,7 @@
     const dragIdx = dragState ? dragState.currentIdx : -1;
 
     bracelet.forEach((bead, i) => {
-      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const angle = beadAngles[i];
       const slotX = cx + Math.cos(angle) * ringR;
       const slotY = cy + Math.sin(angle) * ringR;
       const r = (MM_TO_SVG * bead.size) / 2;
