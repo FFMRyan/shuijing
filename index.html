@@ -4321,22 +4321,25 @@
       rail.style.display = 'none';
     }
   }
-  // 修剪 / 补全到当前 (ropeLen, beadMm) 允许的颗数区间
+  // 修剪超出绳长容量的珠子(以已有珠子直径之和 > 绳长 mm 为判据)
+  // 注意:不会改变现有珠子尺寸,只从末尾移除装不下的珠子
   function enforceBeadRange(reason) {
-    const { min, max } = currentBeadRange();
-    if (bracelet.length > max) {
-      const trimmed = bracelet.length - max;
-      bracelet.length = max;
-      if (reason) toast(`${reason},超出最多 ${max} 颗,已自动减去 ${trimmed} 颗`);
+    const limit = activeRopeLength * 10;
+    let total = totalBeadMm();
+    let removed = 0;
+    while (total > limit && bracelet.length > 0) {
+      const last = bracelet.pop();
+      total -= last.size;
+      removed++;
     }
-    // 不主动补齐到 min(让用户继续添加),只在颜色 / 文案上提示"未成串"
+    if (removed > 0 && reason) {
+      toast(`${reason},超出绳长容量,已移除末尾 ${removed} 颗`);
+    }
   }
 
   function setSize(size) {
     activeSize = size;
-    // 同步更新现有手串里所有珠子的尺寸,让环径/排布按新 mm 真实重排
-    bracelet.forEach(b => b.size = size);
-    enforceBeadRange(`珠径改为 ${size}mm`);
+    // 仅影响后续新增的珠子;不修改已有珠子尺寸
     renderSizeRail();
     renderBracelet();
   }
@@ -4525,19 +4528,30 @@
     return { min: Math.min(min, max), max };
   }
 
-  // 当前手串(绳长 + 珠径)对应的允许颗数区间
+  // 已用绳长(所有珠子直径之和,mm)
+  function totalBeadMm() {
+    return bracelet.reduce((sum, b) => sum + b.size, 0);
+  }
+
+  // 当前手串(绳长 + 平均珠径)对应的允许颗数区间
+  // 已有珠子取平均尺寸作为代表;空串用 activeSize
   function currentBeadRange() {
-    const mm = bracelet.length > 0 ? bracelet[0].size : activeSize;
+    const mm = bracelet.length > 0 ? (totalBeadMm() / bracelet.length) : activeSize;
     return getBeadRange(activeRopeLength, mm);
+  }
+
+  // 剩余可用绳长(mm)
+  function remainingMm() {
+    return activeRopeLength * 10 - totalBeadMm();
   }
 
   /* ============ Bracelet rendering ============ */
   function renderBracelet() {
     const svg = document.getElementById('bracelet-svg');
     const cx = 180, cy = 180;
-    // 颗数与尺寸暂取数组首项(当前界面所有珠子共享 activeSize)
-    const _bSize = bracelet.length > 0 ? bracelet[0].size : activeSize;
-    const _geom = computeBraceletGeom(bracelet.length || 12, _bSize, activeRopeLength);
+    // 用最大珠径作为 safety cap(防 viewBox 裁切);ringR 仍由绳长决定
+    const _maxMm = bracelet.length > 0 ? Math.max(...bracelet.map(b => b.size)) : activeSize;
+    const _geom = computeBraceletGeom(bracelet.length || 12, _maxMm, activeRopeLength);
     const ringR = _geom.ringR;
 
     // 当前绳长 + 珠径下的允许区间(同步刷新 stage-meta 的 "X-Y 颗")
@@ -5179,9 +5193,10 @@
       newestIdx = -1;
       return;
     }
-    const dynMax = currentBeadRange().max;
-    if (bracelet.length >= dynMax) {
-      toast(`${activeRopeLength}cm 绳最多串 ${dynMax} 颗 ${activeSize}mm 珠`);
+    // 物理约束:已有珠子总直径 + 新珠直径 ≤ 绳长(mm)
+    if (remainingMm() < activeSize) {
+      const rem = Math.max(0, remainingMm());
+      toast(`剩余绳长 ${rem.toFixed(0)}mm,容不下 ${activeSize}mm 珠`);
       return;
     }
     bracelet.push(makeBead(id, activeSize));
@@ -5403,7 +5418,8 @@
     const cx = 180, cy = 180;
     const n = bracelet.length;
     if (n === 0) return;
-    const _geom = computeBraceletGeom(n, bracelet[0].size, activeRopeLength);
+    const _maxMm = Math.max(...bracelet.map(b => b.size));
+    const _geom = computeBraceletGeom(n, _maxMm, activeRopeLength);
     const ringR = _geom.ringR;
 
     let floatPt = null;
