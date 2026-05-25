@@ -3823,7 +3823,7 @@
     <div class="bracelet-stage">
       <div class="bracelet-glow"></div>
       <div class="stage-meta">
-        <span><b id="bead-count">0</b> / 12–18 颗</span>
+        <span><b id="bead-count">0</b> / <span id="bead-range">12–18</span> 颗</span>
         <span class="dot-sep">·</span>
         <span id="thread-name">素 · 银线</span>
         <span class="dot-sep">·</span>
@@ -4321,12 +4321,28 @@
       rail.style.display = 'none';
     }
   }
+  // 修剪 / 补全到当前 (ropeLen, beadMm) 允许的颗数区间
+  function enforceBeadRange(reason) {
+    const { min, max } = currentBeadRange();
+    if (bracelet.length > max) {
+      const trimmed = bracelet.length - max;
+      bracelet.length = max;
+      if (reason) toast(`${reason},超出最多 ${max} 颗,已自动减去 ${trimmed} 颗`);
+    }
+    // 不主动补齐到 min(让用户继续添加),只在颜色 / 文案上提示"未成串"
+  }
+
   function setSize(size) {
     activeSize = size;
+    // 同步更新现有手串里所有珠子的尺寸,让环径/排布按新 mm 真实重排
+    bracelet.forEach(b => b.size = size);
+    enforceBeadRange(`珠径改为 ${size}mm`);
     renderSizeRail();
+    renderBracelet();
   }
   function setRopeLength(len) {
     activeRopeLength = len;
+    enforceBeadRange(`绳长改为 ${len}cm`);
     renderSizeRail();
     renderBracelet(); // 触发 stage-meta 刷新,显示当前绳长
   }
@@ -4486,23 +4502,61 @@
     return { color: dominant.color, glow: dominant.glow, name: names[dominant.key] + lenSuffix, length: activeRopeLength };
   }
 
+  /* ============ Bracelet geometry · 真实物理比例(以绳长为依据) ============ */
+  // 统一 cm/mm → SVG 单位的比例。1cm = 45,即 10×4.5,珠子与绳子同尺度。
+  const CM_TO_SVG = 45;
+  const MM_TO_SVG = 4.5;
+  // 给定颗数 n、单颗直径 mm、绳长 ropeCm,返回 {beadR, ringR}
+  // - 真实物理:circumference = 2πR = ropeLength ⇒ R = ropeLength / (2π)
+  // - 越长的绳,bracelet 环径越大;珠子尺寸严格按 mm 渲染
+  // - 安全约束:ringR + beadR ≤ 178(防 viewBox 裁切)
+  function computeBraceletGeom(n, mm, ropeCm) {
+    const beadR = (MM_TO_SVG * mm) / 2;
+    const physRing = (ropeCm * CM_TO_SVG) / (2 * Math.PI);
+    const ringR = Math.min(physRing, 178 - beadR);
+    return { beadR, ringR };
+  }
+
+  // 给定绳长(cm)与珠径(mm),估算最大珠数(N_max = ⌊L_cm × 10 / d_mm⌋)
+  // 同时给出推荐下限(≈ 60% 的最大值,但不低于 6 颗)
+  function getBeadRange(ropeCm, beadMm) {
+    const max = Math.max(2, Math.floor((ropeCm * 10) / beadMm));
+    const min = Math.max(6, Math.ceil(max * 0.6));
+    return { min: Math.min(min, max), max };
+  }
+
+  // 当前手串(绳长 + 珠径)对应的允许颗数区间
+  function currentBeadRange() {
+    const mm = bracelet.length > 0 ? bracelet[0].size : activeSize;
+    return getBeadRange(activeRopeLength, mm);
+  }
+
   /* ============ Bracelet rendering ============ */
   function renderBracelet() {
     const svg = document.getElementById('bracelet-svg');
     const cx = 180, cy = 180;
-    const ringR = 130;
+    // 颗数与尺寸暂取数组首项(当前界面所有珠子共享 activeSize)
+    const _bSize = bracelet.length > 0 ? bracelet[0].size : activeSize;
+    const _geom = computeBraceletGeom(bracelet.length || 12, _bSize, activeRopeLength);
+    const ringR = _geom.ringR;
+
+    // 当前绳长 + 珠径下的允许区间(同步刷新 stage-meta 的 "X-Y 颗")
+    const range = currentBeadRange();
+    const rangeEl = document.getElementById('bead-range');
+    if (rangeEl) rangeEl.textContent = `${range.min}–${range.max}`;
+
     const countEl = document.getElementById('bead-count');
     countEl.textContent = bracelet.length;
     countEl.className = '';
     if (bracelet.length === 0)               countEl.classList.add('empty');
-    else if (bracelet.length < MIN_BEADS)    countEl.classList.add('short');
-    else if (bracelet.length === MAX_BEADS)  countEl.classList.add('full');
+    else if (bracelet.length < range.min)    countEl.classList.add('short');
+    else if (bracelet.length >= range.max)   countEl.classList.add('full');
     else                                     countEl.classList.add('good');
     document.getElementById('bracelet-vibe').textContent = computeVibe();
 
     // Stage + button state
     const stage = document.querySelector('.bracelet-stage');
-    if (stage) stage.classList.toggle('complete', bracelet.length >= MAX_BEADS);
+    if (stage) stage.classList.toggle('complete', bracelet.length >= range.max);
     const magic = document.querySelector('.magic-btn');
     if (magic) magic.classList.toggle('breathe', bracelet.length === 0);
 
@@ -4513,27 +4567,47 @@
     threadNameEl.style.color = '';
     threadNameEl.style.textShadow = '';
 
-    // ===== Rope · braided / twisted look =====
-    // Two dashed strokes (light + dark) offset by one segment create the
-    // alternating "candy-stripe" weave of a real twisted cord (玉线/蜡线/麻绳).
-    const threadDef = `<filter id="thread-blur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>`;
-    const ropeW = 3.2;                                  // visible band width
-    const twistN = 56;                                  // strand crossings around the ring
-    const segLen = (2 * Math.PI * ringR) / (twistN * 2);// each dash = half a twist pitch
-    const ropeColorDark = darken(thread.color, 0.35);
-    const ropeColorMid  = darken(thread.color, 0.12);
-    const ropeHi        = lighten(thread.glow, 0.15);
+    // ===== Rope · 3D shaded twisted cord =====
+    // 上下文光照模型:光源在左上,右下偏暗 → 用 linearGradient 给环身上色;
+    // 再叠加扭股(twist)亮/暗高频细节,模拟麻绳/玉线编织肌理。
+    const ropeW = Math.max(2.6, Math.min(4.4, _geom.beadR * 0.22));  // 绳径随珠径浮动
+    const twistN = 56;
+    const segLen = (2 * Math.PI * ringR) / (twistN * 2);
+    const ropeColorDark = darken(thread.color, 0.45);
+    const ropeColorMid  = darken(thread.color, 0.10);
+    const ropeColorLite = lighten(thread.color, 0.18);
+    const ropeHi        = lighten(thread.glow, 0.25);
+
+    const threadDef =
+      `<filter id="thread-blur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>` +
+      // 光照渐变:左上亮 → 右下暗,模拟立体管状受光
+      `<linearGradient id="rope-shade" gradientUnits="userSpaceOnUse" x1="${cx - ringR}" y1="${cy - ringR}" x2="${cx + ringR}" y2="${cy + ringR}">
+         <stop offset="0%"   stop-color="${ropeColorLite}"/>
+         <stop offset="40%"  stop-color="${ropeColorMid}"/>
+         <stop offset="100%" stop-color="${ropeColorDark}"/>
+       </linearGradient>` +
+      // 上半圈细高光(光源在上),用作 stroke 顶面镜面反射
+      `<linearGradient id="rope-highlight" gradientUnits="userSpaceOnUse" x1="${cx}" y1="${cy - ringR}" x2="${cx}" y2="${cy + ringR}">
+         <stop offset="0%"   stop-color="${ropeHi}" stop-opacity="0.85"/>
+         <stop offset="45%"  stop-color="${ropeHi}" stop-opacity="0.15"/>
+         <stop offset="100%" stop-color="${ropeHi}" stop-opacity="0"/>
+       </linearGradient>`;
+
     const threadCircles =
-      // soft outer halo
-      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${thread.glow}" stroke-width="${ropeW + 3}" opacity="0.28" filter="url(#thread-blur)"/>` +
-      // body — darker base for groove depth
-      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${ropeColorDark}" stroke-width="${ropeW}"/>` +
-      // light strand (one half of the twist)
-      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${ropeColorMid}" stroke-width="${ropeW - 0.4}" stroke-dasharray="${segLen} ${segLen}" stroke-dashoffset="0" opacity="0.95"/>` +
-      // dark groove (other half of the twist, offset by one segment)
-      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="${ropeW - 1.6}" stroke-dasharray="${segLen * 0.35} ${segLen * 1.65}" stroke-dashoffset="${segLen}" opacity="0.55"/>` +
-      // tiny specular ribs along the light strand
-      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${ropeHi}" stroke-width="0.7" stroke-dasharray="${segLen * 0.45} ${segLen * 1.55}" stroke-dashoffset="${segLen * 0.32}" opacity="0.75"/>`;
+      // 1) 整圈外侧柔光晕(衬底)
+      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${thread.glow}" stroke-width="${ropeW + 3.4}" opacity="0.22" filter="url(#thread-blur)"/>` +
+      // 2) 环身:渐变描边,提供立体受光基底
+      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="url(#rope-shade)" stroke-width="${ropeW}"/>` +
+      // 3) 扭股暗纹(凹槽):绕环规律分布的短破折
+      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="rgba(0,0,0,0.5)" stroke-width="${ropeW * 0.55}" stroke-dasharray="${segLen * 0.4} ${segLen * 1.6}" stroke-dashoffset="${segLen}" opacity="0.6"/>` +
+      // 4) 扭股亮股:错位 stroke-dashoffset 形成"螺旋"
+      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${ropeColorLite}" stroke-width="${ropeW * 0.85}" stroke-dasharray="${segLen} ${segLen}" stroke-dashoffset="0" opacity="0.55"/>` +
+      // 5) 顶面镜面反射(只覆盖上半圈)
+      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="url(#rope-highlight)" stroke-width="${ropeW * 0.45}"/>` +
+      // 6) 细密线纹(specular ribs)
+      `<circle cx="${cx}" cy="${cy}" r="${ringR}" fill="none" stroke="${ropeHi}" stroke-width="0.7" stroke-dasharray="${segLen * 0.4} ${segLen * 1.6}" stroke-dashoffset="${segLen * 0.32}" opacity="0.6"/>` +
+      // 7) 内侧阴影线(略小半径),增强"环"立体感
+      `<circle cx="${cx}" cy="${cy + 0.6}" r="${ringR - ropeW * 0.55}" fill="none" stroke="rgba(0,0,0,0.18)" stroke-width="0.6" opacity="0.7"/>`;
 
     let html = `<defs>${threadDef}</defs>` + threadCircles;
 
@@ -4547,10 +4621,8 @@
       return;
     }
 
-    // Base bead size scales with count; per-bead mm size further multiplies
+    // 真实 mm → SVG 单位,珠间相切密贴
     const n = bracelet.length;
-    // 加大珠子半径,让圆环上的珠子更紧凑、接近相邻
-    const baseR = n <= 8 ? 26 : n <= 12 ? 23 : n <= 14 ? 20 : n <= 16 ? 18 : 16;
     const defs = [];
     const beadElems = [];
     // 计算被拖珠子在 SVG 用户坐标下的浮动位置(仅在 dragState.moved 时启用)
@@ -4570,7 +4642,7 @@
       const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
       const slotX = cx + Math.cos(angle) * ringR;
       const slotY = cy + Math.sin(angle) * ringR;
-      const r = baseR * (bead.size / 10);
+      const r = (MM_TO_SVG * bead.size) / 2; // 真实 mm 比例
       const gid = `b-${i}`;
       const newCls = i === newestIdx ? 'bead-new' : '';
       const isCharm = !!(c.shape && CHARM_SHAPES[c.shape]);
@@ -4826,8 +4898,11 @@
 
     // 9. 提示建议
     let tip = '';
-    if (bracelet.length < 12) {
-      tip = `当前 ${bracelet.length} 颗,推荐编织至 12-14 颗以达手腕最佳长度。`;
+    const _tRange = currentBeadRange();
+    if (bracelet.length < _tRange.min) {
+      tip = `当前 ${bracelet.length} 颗,${activeRopeLength}cm 绳 ${bracelet[0]?.size||activeSize}mm 珠建议编织 ${_tRange.min}-${_tRange.max} 颗。`;
+    } else if (bracelet.length >= _tRange.max) {
+      tip = `已达 ${activeRopeLength}cm 绳 ${bracelet[0]?.size||activeSize}mm 珠的上限 ${_tRange.max} 颗,继续添加将无法成串。`;
     } else if (present.length < 3) {
       const nextKey = WUXING_NEXT[dom.e.key];
       tip = `可加入少量 ${inline(ELEMENTS.find(e => e.key === nextKey))} <b>相生</b>水晶,让美感层次更丰富。`;
@@ -5031,9 +5106,10 @@
     const keyword = ELEM_MEANING[dominant.key].keyword;
     const tone = `主${domTag}${sub ? '辅' + subTag : '调'} · ${keyword}`;
 
-    // Stage 1 · 未成串（< MIN_BEADS）：显示进度 + 主调
-    if (bracelet.length < MIN_BEADS) {
-      return tone + `<br/><small>已编织 ${bracelet.length} 颗 · 至少 ${MIN_BEADS} 颗成串</small>`;
+    // Stage 1 · 未成串(< 动态下限):显示进度 + 主调
+    const _range = currentBeadRange();
+    if (bracelet.length < _range.min) {
+      return tone + `<br/><small>已编织 ${bracelet.length} 颗 · 至少 ${_range.min} 颗成串</small>`;
     }
 
     // Stage 2 · 已成串：完整解读
@@ -5103,7 +5179,11 @@
       newestIdx = -1;
       return;
     }
-    if (bracelet.length >= MAX_BEADS) return;
+    const dynMax = currentBeadRange().max;
+    if (bracelet.length >= dynMax) {
+      toast(`${activeRopeLength}cm 绳最多串 ${dynMax} 颗 ${activeSize}mm 珠`);
+      return;
+    }
     bracelet.push(makeBead(id, activeSize));
     newestIdx = bracelet.length - 1;
     renderBracelet();
@@ -5164,8 +5244,9 @@
       pick = presets[Math.floor(Math.random() * presets.length)];
       tries++;
     } while (tries < 5 && bracelet.length === pick.ids.length && pick.ids.every((id, i) => bracelet[i] && bracelet[i].id === id));
-    // 颗数随机 12-18(含两端);超过 preset 提供的 12 颗时,从同一 preset 循环采样以保持主题
-    const targetN = MIN_BEADS + Math.floor(Math.random() * (MAX_BEADS - MIN_BEADS + 1));
+    // 颗数严格依据当前 (绳长, 珠径) 的物理上限随机;超过 preset 12 颗时循环采样保持主题
+    const { min: rMin, max: rMax } = getBeadRange(activeRopeLength, activeSize);
+    const targetN = rMin + Math.floor(Math.random() * (rMax - rMin + 1));
     const ids = [];
     for (let i = 0; i < targetN; i++) {
       ids.push(pick.ids[i % pick.ids.length]);
@@ -5319,10 +5400,11 @@
   function updateBeadPositionsDuringDrag() {
     const svg = document.getElementById('bracelet-svg');
     if (!svg) return;
-    const cx = 180, cy = 180, ringR = 130;
+    const cx = 180, cy = 180;
     const n = bracelet.length;
     if (n === 0) return;
-    const baseR = n <= 8 ? 26 : n <= 12 ? 23 : n <= 14 ? 20 : n <= 16 ? 18 : 16;
+    const _geom = computeBraceletGeom(n, bracelet[0].size, activeRopeLength);
+    const ringR = _geom.ringR;
 
     let floatPt = null;
     if (dragState && dragState.moved) {
@@ -5335,7 +5417,7 @@
       const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
       const slotX = cx + Math.cos(angle) * ringR;
       const slotY = cy + Math.sin(angle) * ringR;
-      const r = baseR * (bead.size / 10);
+      const r = (MM_TO_SVG * bead.size) / 2;
       const isDrag = i === dragIdx && !!floatPt;
       const rr = isDrag ? r * 1.18 : r;
       const px = isDrag ? floatPt.x : slotX;
