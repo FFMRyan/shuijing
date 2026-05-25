@@ -3311,14 +3311,15 @@
   .diy-cta:hover svg { opacity: 1; }
   .diy-cta:active { transform: scale(0.96); }
 
-  /* —— 立即下单为主 CTA:占满剩余空间,字号更显眼 —— */
+  /* —— 立即下单缩到与一键配置同尺寸(仍保留紫色实底突出主操作)—— */
   .cta-row .magic-btn {
-    flex: 1 1 auto !important;
-    justify-content: center !important;
-    padding: 13px 22px !important;
-    font-size: 14px !important;
-    letter-spacing: 5px !important;
+    flex: 0 0 auto !important;
+    padding: 7px 14px !important;
+    font-size: 10px !important;
+    letter-spacing: 1.2px !important;
+    gap: 4px !important;
   }
+  .cta-row .magic-btn .sparkle { font-size: 11px !important; }
 
   /* —— bracelet 舞台底:完全干净,任何涂层/光晕一律去除 —— */
   .bracelet-stage {
