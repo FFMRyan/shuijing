@@ -5259,7 +5259,11 @@
       pick = presets[Math.floor(Math.random() * presets.length)];
       tries++;
     } while (tries < 5 && bracelet.length === pick.ids.length && pick.ids.every((id, i) => bracelet[i] && bracelet[i].id === id));
-    // 颗数严格依据当前 (绳长, 珠径) 的物理上限随机;超过 preset 12 颗时循环采样保持主题
+
+    // 一键灵感:绳长 / 珠径 / 颗数 全部随机
+    activeRopeLength = ROPE_LENGTHS[Math.floor(Math.random() * ROPE_LENGTHS.length)];
+    activeSize       = BEAD_SIZES[Math.floor(Math.random() * BEAD_SIZES.length)];
+    // 颗数严格依据 (绳长, 珠径) 的物理上限随机;超过 preset 12 颗时循环采样保持主题
     const { min: rMin, max: rMax } = getBeadRange(activeRopeLength, activeSize);
     const targetN = rMin + Math.floor(Math.random() * (rMax - rMin + 1));
     const ids = [];
@@ -5267,6 +5271,8 @@
       ids.push(pick.ids[i % pick.ids.length]);
     }
     bracelet = ids.map(id => makeBead(id, activeSize));
+    // 同步右侧侧栏 active 状态 + 顶部 stage-meta
+    renderSizeRail();
     renderBracelet();
     // 释放波纹动画
     const magic = document.querySelector('.magic-btn');
